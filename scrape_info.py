@@ -3,6 +3,7 @@ import json
 import csv
 import gspread
 import sys
+import urllib.parse
 from datetime import datetime
 from oauth2client.service_account import ServiceAccountCredentials
 
@@ -42,45 +43,51 @@ def write_to_google_sheets(sheet_name, tournament_list):
     sheet = client.open(sheet_name).sheet1
     sheet.clear()
 
-    # Define headers
+    # Define headers (removed hostName, ballerTvEnabled, and gender)
     headers = [
         "eventId", 
         "name", 
         "locationName", 
-        "hostName", 
         "startDate", 
         "endDate",
         "registrationOpenDate", 
         "registrationCloseDate", 
         "lateRegistrationDate", 
-        "isUSAV", 
-        "gender", 
-        "ballerTvEnabled"
+        "isUSAV"
     ]
     sheet.append_row(headers)
 
     # Write tournament data with actual formulas for hyperlinks
     for data in tournament_list:
+        # AES Event Hyperlink
         aes_url = f"https://www.advancedeventsystems.com/events/{data.get('eventId')}"
-        google_maps_url = f"https://www.google.com/maps/search/{data.get('locationName').replace(' ', '+')}" if data.get("locationName") else ""
-
-        name_hyperlink = f'=HYPERLINK("{data.get("website")}", "{data.get("name")}")' if data.get("website") else data.get("name")
         event_id_hyperlink = f'=HYPERLINK("{aes_url}", "{data.get("eventId")}")'
-        location_hyperlink = f'=HYPERLINK("{google_maps_url}", "{data.get("locationName")}")' if data.get("locationName") else ""
 
+        # Tournament Website Hyperlink
+        name_hyperlink = f'=HYPERLINK("{data.get("website")}", "{data.get("name")}")' if data.get("website") else data.get("name")
+
+        # Google Maps Hyperlink
+        address_parts = [
+            data.get('address', {}).get('line1', ''),
+            data.get('address', {}).get('city', ''),
+            data.get('address', {}).get('state', {}).get('abbreviation', ''),
+            data.get('address', {}).get('zip', '')
+        ]
+        full_address = ", ".join(filter(None, address_parts))  # Remove empty values
+        maps_url = f"https://www.google.com/maps/search/{urllib.parse.quote(full_address)}"
+        location_hyperlink = f'=HYPERLINK("{maps_url}", "{data.get("locationName")}")' if full_address else data.get("locationName")
+
+        # Add row to Google Sheets
         row = [
             event_id_hyperlink,
             name_hyperlink,
             location_hyperlink,
-            data.get("hostName"),
             format_date(data.get("startDate")),
             format_date(data.get("endDate")),
             format_date(data.get("registrationOpenDate")),
             format_date(data.get("registrationCloseDate")),
             format_date(data.get("lateRegistrationDate")),
-            data.get("affiliation", {}).get("isUSAV"),
-            ", ".join(g.get("displayName") for g in data.get("genderClassTypes", [])),
-            data.get("ballerTvEnabled")
+            data.get("affiliation", {}).get("isUSAV")
         ]
         sheet.append_row(row, value_input_option="USER_ENTERED")
 
