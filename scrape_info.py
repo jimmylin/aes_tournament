@@ -1,6 +1,5 @@
 import requests
 import json
-import csv
 import gspread
 import sys
 import urllib.parse
@@ -17,23 +16,39 @@ def fetch_aes_data(tournament_id):
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         data = response.json()
-        print(f"Data fetched for tournament {tournament_id}")
+        print(f"✅ Data fetched for tournament {tournament_id}")
         return data
     except requests.exceptions.RequestException as e:
-        print(f"Error fetching data for tournament {tournament_id}: {e}")
+        print(f"❌ Error fetching data for tournament {tournament_id}: {e}")
         return None
 
 def format_date(date_str):
-    """Convert ISO date to 'Month Day, Year' with correct suffix."""
+    """Convert ISO date to 'Mon Day, Year' with correct suffix."""
     if date_str:
         try:
             dt = datetime.fromisoformat(date_str.replace("Z", ""))
             day = dt.day
             suffix = "th" if 11 <= day <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
-            return dt.strftime(f"%B {day}{suffix}, %Y")
+            return dt.strftime(f"%b {day}{suffix}, %Y")  # Example: "Jan 1st, 2025"
         except ValueError:
             return date_str
     return ""
+
+def load_existing_data(sheet):
+    """Load existing tournament data from Google Sheets."""
+    data = sheet.get_all_values()
+    if not data:
+        return {}, []
+
+    headers = data[0]
+    rows = data[1:]
+
+    existing_tournaments = {}
+    for row in rows:
+        event_id = row[0].split('"')[3] if "HYPERLINK" in row[0] else row[0]  # Extract eventId from hyperlink
+        existing_tournaments[event_id] = row
+
+    return existing_tournaments, headers
 
 def write_to_google_sheets(sheet_name, tournament_list):
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -41,29 +56,28 @@ def write_to_google_sheets(sheet_name, tournament_list):
     client = gspread.authorize(creds)
     
     sheet = client.open(sheet_name).sheet1
-    sheet.clear()
 
-    # Define headers (removed hostName, ballerTvEnabled, and gender)
-    headers = [
-        "eventId", 
-        "name", 
-        "locationName", 
-        "startDate", 
-        "endDate",
-        "registrationOpenDate", 
-        "registrationCloseDate", 
-        "lateRegistrationDate", 
-        "isUSAV"
+    # Load existing tournaments before updating
+    existing_tournaments, headers = load_existing_data(sheet)
+
+    # Define human-readable headers
+    readable_headers = [
+        "AES Link", "Tournament Name", "Location", 
+        "Start Date", "End Date", 
+        "Reg Opens", "Reg Closes", "Late Reg", "USAV Sanctioned"
     ]
-    sheet.append_row(headers)
 
-    # Write tournament data with actual formulas for hyperlinks
+    # Write headers if missing
+    if not headers or headers != readable_headers:
+        sheet.clear()
+        sheet.append_row(readable_headers)
+
+    updated_rows = []
     for data in tournament_list:
-        # AES Event Hyperlink
-        aes_url = f"https://www.advancedeventsystems.com/events/{data.get('eventId')}"
-        event_id_hyperlink = f'=HYPERLINK("{aes_url}", "{data.get("eventId")}")'
+        event_id = str(data.get("eventId"))
+        aes_url = f"https://www.advancedeventsystems.com/events/{event_id}"
+        event_id_hyperlink = f'=HYPERLINK("{aes_url}", "{event_id}")'
 
-        # Tournament Website Hyperlink
         name_hyperlink = f'=HYPERLINK("{data.get("website")}", "{data.get("name")}")' if data.get("website") else data.get("name")
 
         # Google Maps Hyperlink
@@ -73,11 +87,10 @@ def write_to_google_sheets(sheet_name, tournament_list):
             data.get('address', {}).get('state', {}).get('abbreviation', ''),
             data.get('address', {}).get('zip', '')
         ]
-        full_address = ", ".join(filter(None, address_parts))  # Remove empty values
+        full_address = ", ".join(filter(None, address_parts))
         maps_url = f"https://www.google.com/maps/search/{urllib.parse.quote(full_address)}"
         location_hyperlink = f'=HYPERLINK("{maps_url}", "{data.get("locationName")}")' if full_address else data.get("locationName")
 
-        # Add row to Google Sheets
         row = [
             event_id_hyperlink,
             name_hyperlink,
@@ -89,9 +102,22 @@ def write_to_google_sheets(sheet_name, tournament_list):
             format_date(data.get("lateRegistrationDate")),
             data.get("affiliation", {}).get("isUSAV")
         ]
+
+        # Update existing tournament or add a new one
+        if event_id in existing_tournaments:
+            existing_tournaments[event_id] = row
+        else:
+            updated_rows.append(row)
+
+    # Update sheet with new data (preserving manual entries)
+    sheet.clear()
+    sheet.append_row(readable_headers)  # Always ensure headers are written
+    for row in existing_tournaments.values():
+        sheet.append_row(row, value_input_option="USER_ENTERED")
+    for row in updated_rows:
         sheet.append_row(row, value_input_option="USER_ENTERED")
 
-    print(f"Data successfully written to Google Sheets: {sheet_name}")
+    print(f"✅ Data successfully written to Google Sheets: {sheet_name}")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
