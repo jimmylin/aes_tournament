@@ -1,6 +1,7 @@
-Sure! Here's the markdown for your README:  
+Here's a well-structured README for your project:  
 
-```markdown
+---
+
 # AES Tournament Scraper
 
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)  
@@ -49,7 +50,7 @@ python scrape.py 37945 37337
 ```
 
 ### Expected Output:
-The script fetches tournament details and writes them to a **Google Sheet** named `"AES Data"`.
+The script fetches tournament details and writes them to a **Google Sheet** named `"AES Data"`.  
 
 ### Google Sheets Output:
 | eventId | name | locationName | hostName | startDate | endDate | registrationOpenDate | registrationCloseDate | lateRegistrationDate | isUSAV | gender | ballerTvEnabled |
@@ -69,6 +70,7 @@ The script fetches tournament details and writes them to a **Google Sheet** name
 
 ## 📄 License
 This project is licensed under the MIT License.  
-```
 
-Just copy and paste this into your `README.md` file. Let me know if you need any tweaks! 🚀
+---
+
+Let me know if you'd like any modifications! 🚀
