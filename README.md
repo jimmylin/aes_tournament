@@ -1,7 +1,3 @@
-Here's a well-structured README for your project:  
-
----
-
 # AES Tournament Scraper
 
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)  
@@ -71,6 +67,3 @@ The script fetches tournament details and writes them to a **Google Sheet** name
 ## 📄 License
 This project is licensed under the MIT License.  
 
----
-
-Let me know if you'd like any modifications! 🚀
